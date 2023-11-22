@@ -10,7 +10,6 @@ class Test:
 
     def __init__(self, x: int, y: int) -> None:
         self._validate_types(x, y, _type=int)
-
         self.x = x
         self.y = y
         self.db = DBService()
@@ -40,10 +39,11 @@ class Test:
         with open(json_filename, 'w') as json_file:
             json.dump(quizzes, json_file)
 
+    @staticmethod
     def _validate_types(*args, _type=None):
         """Валидирует аргументы по переданному типу"""
         if any(not isinstance(val, _type) for val in args):
-            raise ValueError("Неверный тип аргумента")
+            raise ValueError(f"Неверный тип аргумента")
 
 
 if __name__ == "__main__":
