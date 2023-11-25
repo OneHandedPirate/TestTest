@@ -19,39 +19,60 @@ class DBService:
         self._connection.close()
 
     def _create_table(self) -> None:
-        """Создает таблицу 'quiz', если она не существует"""
+        """Создает таблицы 'quiz' и 'category' если они не существует"""
         with self as cursor:
-            query = """
-                    CREATE TABLE IF NOT EXISTS quiz (
+            query1 = """
+                    CREATE TABLE IF NOT EXISTS category (
                     id INTEGER PRIMARY KEY,
-                    category TEXT,
-                    question TEXT,
-                    answer TEXT,
-                    UNIQUE(question, answer)
-                    )
+                    name TEXT UNIQUE
+                    );
                     """
-            cursor.execute(query)
+            query2 = """CREATE TABLE IF NOT EXISTS quiz (
+                        id INTEGER PRIMARY KEY,
+                        category_id INTEGER,
+                        question TEXT,
+                        answer TEXT,
+                        FOREIGN KEY (category_id) REFERENCES category(id),
+                        UNIQUE(question, answer)
+                    );
+                    """
+            cursor.execute(query1)
+            cursor.execute(query2)
             self._connection.commit()
+
+    def _save_categories(self, categories: list[tuple]) -> None:
+        """Сохраняет записи из списка 'categories' в базе данных, игнорируя дубликаты"""
+        query = """INSERT OR IGNORE INTO category (name) VALUES (?)"""
+        self._cursor.executemany(query, categories)
+        self._connection.commit()
 
     def save_quizzes(self, quizzes: list[tuple]) -> None:
         """Сохраняет записи из списка 'quizzes'в базе данных, игнорируя дубликаты"""
         with self as cursor:
-            query = """INSERT OR IGNORE INTO quiz (category, question, answer)
-                    VALUES (?, ?, ?)"""
+            categories = [(quiz[0],) for quiz in quizzes]
+            self._save_categories(categories)
+
+            query = """INSERT OR IGNORE INTO quiz (category_id, question, answer)
+                    VALUES ((SELECT id FROM category WHERE name = ?), ?, ?)"""
             cursor.executemany(query, quizzes)
             self._connection.commit()
 
     def get_cat_count(self, category: str) -> int:
         """Возвращает количество записей в заданной категории"""
         with self as cursor:
-            query = """SELECT COUNT(*) FROM quiz WHERE category = ?"""
+            query = """SELECT COUNT(*) FROM category WHERE name = ?"""
             cursor.execute(query, (category,))
             return cursor.fetchone()[0]
 
-    def fetch_records(self, num: int) -> list[tuple]:
+    def fetch_records(self, num: int) -> list[dict]:
         """Возвращает случайно выбранные 'num' записей из базы данных"""
         with self as cursor:
-            query = """SELECT * FROM quiz ORDER BY RANDOM() LIMIT ?"""
+            query = """SELECT c.name, q.question, q.answer  
+                       FROM quiz q JOIN category c ON q.category_id = c.id
+                       ORDER BY RANDOM() 
+                       LIMIT ?"""
             cursor.execute(query, (num,))
-            return cursor.fetchall()
+            keys = ['category', 'question', 'answer']
+            res = [{key: val for key, val in zip(keys, quiz)} for quiz in cursor.fetchall()]
+            return res
 
